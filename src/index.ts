@@ -1,66 +1,80 @@
-import { DurableObject } from "cloudflare:workers";
+import { CredentialsDurableObject } from "./durable-objects/credentials-durable-object";
+import { ResponseBuilder } from "./common-types/response-builder";
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
-
-/** A Durable Object's behavior is defined in an exported Javascript class */
-export class MyDurableObject extends DurableObject<Env> {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 */
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-	}
-
-	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
-	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
-	}
-}
+export { CredentialsDurableObject };
 
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
-	async fetch(request, env, ctx): Promise<Response> {
-		// Create a `DurableObjectId` for an instance of the `MyDurableObject`
-		// class named "foo". Requests from all Workers to the instance named
-		// "foo" will go to a single globally unique Durable Object instance.
-		const id: DurableObjectId = env.MY_DURABLE_OBJECT.idFromName("foo");
+    /**
+     * This is the standard fetch handler for a Cloudflare Worker
+     *
+     * @param request - The request submitted to the Worker from the client
+     * @param env - The interface to reference bindings declared in wrangler.jsonc
+     * @param ctx - The execution context of the Worker
+     * @returns The response to be sent back to the client
+     */
+    async fetch(request, env, ctx): Promise<Response> {
+        const url = new URL(request.url);
+        const method = request.method;
 
-		// Create a stub to open a communication channel with the Durable
-		// Object instance.
-		const stub = env.MY_DURABLE_OBJECT.get(id);
+        // Create a `DurableObjectId` for an instance of the `CredentialsDurableObject`
+        // class named "CredentialsDurableObject". Requests from all Workers to the instance named
+        // "CredentialsDurableObject" will go to a single globally unique Durable Object instance.
+        const id: DurableObjectId = env.CREDENTIALS_DURABLE_OBJECT.idFromName("credentials_do");
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance
-		const greeting = await stub.sayHello("world");
+        // Create a stub to open a communication channel with the Durable
+        // Object instance.
+        const stub = env.CREDENTIALS_DURABLE_OBJECT.get(id);
 
-		return new Response(greeting);
-	},
+        // Handle GET /credentials - return all credentials
+        if (method === 'GET' && url.pathname === '/credentials') {
+            const result = await stub.getAllCredentials();
+            return ResponseBuilder.build(result.httpCode, result);
+        }
+
+        // Handle POST /credentials - insert new credential
+        if (method === 'POST' && url.pathname === '/credentials') {
+            const body = await request.json() as any;
+            
+            // Validate required fields
+            const requiredFields = ['location_id', 'company_id', 'access_token', 'refresh_token', 'expires_at'];
+            const missingFields = requiredFields.filter(field => !body[field]);
+            
+            if (missingFields.length > 0) {
+                const errorObject = {
+                    status: 'ERROR',
+                    errorCode: 'MISSING_FIELDS',
+                    message: `Missing required fields: ${missingFields.join(', ')}`,
+                    missingFields: missingFields
+                };
+                return ResponseBuilder.build(400, errorObject);
+            }
+
+            const result = await stub.insertCredential({
+                location_id: body.location_id,
+                company_id: body.company_id,
+                access_token: body.access_token,
+                refresh_token: body.refresh_token,
+                expires_at: body.expires_at
+            });
+
+            return ResponseBuilder.build(result.httpCode, result);
+        }
+
+        // Handle OPTIONS request for CORS
+        if (method === 'OPTIONS') {
+            return new Response(null, {
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                }
+            });
+        }
+
+        // If no matching route, return 404
+        return new Response("Not Found", {
+            status: 404,
+            headers: { 'Content-Type': 'text/plain' }
+        });
+    },
 } satisfies ExportedHandler<Env>;
