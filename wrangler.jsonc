@@ -20,6 +20,10 @@
 			{
 				"class_name": "CredentialsDurableObject",
 				"name": "CREDENTIALS_DURABLE_OBJECT"
+			},
+			{
+				"class_name": "EndpointsDurableObject",
+				"name": "ENDPOINTS_DURABLE_OBJECTS"
 			}
 		]
 	},
