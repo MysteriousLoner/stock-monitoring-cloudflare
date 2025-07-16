@@ -1,7 +1,9 @@
 import { CredentialsDurableObject } from "./durable-objects/credentials-durable-object";
 import { ResponseBuilder } from "./common-types/response-builder";
+import { EndpointsDurableObject } from './endpoints/endpoints';
 
 export { CredentialsDurableObject };
+export { EndpointsDurableObject };
 
 export default {
     /**
@@ -27,8 +29,86 @@ export default {
 
         // Handle GET /credentials - return all credentials
         if (method === 'GET' && url.pathname === '/credentials') {
-            const result = await stub.getAllCredentials();
-            return ResponseBuilder.build(result.httpCode, result);
+            const url = new URL(request.url);
+            const location_id = url.searchParams.get('location_id');
+            if (location_id) {
+                console.log(`Fetching credentials for location_id: ${location_id}`);
+                const result = await stub.getCredentials(location_id);
+                return ResponseBuilder.build(result.httpCode, result);
+            }
+            else {
+                const result = await stub.getCredentials();
+                const credentialsDB = [];
+                for (const credential of result.data ?? []) {
+                    credentialsDB.push(JSON.stringify(credential));
+                }
+                for (const credential of credentialsDB) {
+                    console.log(`Credential: ${credential}`);
+                }
+                return ResponseBuilder.build(result.httpCode, credentialsDB);
+            }
+        }
+
+        if (method === 'GET' && url.pathname === '/getInventory') {
+            const url = new URL(request.url);
+            const location_id = url.searchParams.get('location_id');
+            const response = await stub.get_inventory(location_id);
+            console.log(`Response from get_inventory: ${JSON.stringify(response)}`);
+
+            return new Response (response.body, {
+                status: response.status,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type',
+                },
+            }); 
+        }
+
+        console.log(`Request URL: ${url.pathname}`);
+        if (url.pathname === '/oauth/initiate') {
+            const id: DurableObjectId = env.ENDPOINTS_DURABLE_OBJECTS.idFromName("oauth_do"); // get the DO instance
+            const stub = env.ENDPOINTS_DURABLE_OBJECTS.get(id);
+
+            // Call the Durable Object's fetch method with a custom path
+            const response = await stub.fetch(request);
+            console.log('[Worker] Received response from DO:', response.status, response.headers.get('location'));
+            
+            return response;
+        }
+
+        if (url.pathname === '/oauth/callback' && request.method === 'GET') {
+            console.log(`${JSON.stringify(request)}`);
+            let id: DurableObjectId = env.ENDPOINTS_DURABLE_OBJECTS.idFromName("oauth_do"); // get the DO instance
+            let stub = env.ENDPOINTS_DURABLE_OBJECTS.get(id);
+            const response = await stub.oauth_callback(request);
+
+            if (response.ok) {
+                const json = await response.json();
+                // console.log(`Location ID: ${json.data?.location_id}`);
+                // console.log(`Company ID: ${json.data?.company_id}`);
+                // console.log(`User Type: ${json.data?.user_type}`);
+                // console.log(`Scope: ${json.data?.company_id}`);
+                // console.log(`Access Code: ${json.data?.access_token}`);
+                // console.log(`Refresh Token: ${json.data?.refresh_token}`);
+
+                let id: DurableObjectId = env.CREDENTIALS_DURABLE_OBJECT.idFromName("credentials_do");
+                let stub = env.CREDENTIALS_DURABLE_OBJECT.get(id);
+
+                const result = await stub.insertCredential({
+                location_id: json.data.location_id,
+                company_id: json.data.company_id,
+                access_token: json.data.access_token,
+                refresh_token: json.data.refresh_token,
+                expires_at: json.data.expires_in,
+            });
+            } else {
+                const error = await response.text();
+                console.error(`OAuth callback failed: ${error}`);
+            }
+
+            // console.log(`responce: ${json.data.company_id}`);
         }
 
         // Handle POST /credentials - insert new credential
@@ -57,6 +137,21 @@ export default {
                 expires_at: body.expires_at
             });
 
+            return ResponseBuilder.build(result.httpCode, result);
+        }
+
+        if (method === 'DELETE' && url.pathname.startsWith('/credentials/')) {
+            const location_id = url.pathname.split('/').pop();
+            console.log(`Deleting credential for location_id: ${location_id}`);
+            if (!location_id) {
+                return ResponseBuilder.build(400, {
+                    status: 'ERROR',
+                    errorCode: 'MISSING_LOCATION_ID',
+                    message: 'Location ID is required'
+                });
+            }
+
+            const result = await stub.deleteCredential(location_id);
             return ResponseBuilder.build(result.httpCode, result);
         }
 
