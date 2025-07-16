@@ -145,6 +145,8 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             );
             }
 
+            this.ensureValidToken(locationId);
+
             const accessToken = await this.getCredentials(locationId);
             // console.log(`Access Token for location_id ${accessToken.data.access_token}:`);
             // console.log(`Access Token: ${accessToken?.data.access_token?.slice(0, 10) ?? 'None'}...`);
@@ -176,7 +178,7 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             const countData = await countRes.json();
             const total = countData?.total?.[0]?.total || 0;
 
-            console.log(`Total inventory items for location_id ${locationId}: ${total}`);
+            // console.log(`Total inventory items for location_id ${locationId}: ${total}`);
 
             if (total === 0) {
             return new Response(JSON.stringify({
@@ -194,7 +196,7 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             });
 
             const inventoryRes = await fetch(`${baseUrl}?${allParams}`, { headers });
-            console.log(`Fetched ${total} inventory items for location_id: ${locationId}`);
+            // console.log(`Fetched ${total} inventory items for location_id: ${locationId}`);
 
             if (!inventoryRes.ok) {
             const errText = await inventoryRes.text();
@@ -220,4 +222,161 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             );
         }
     }
+
+    async ensureValidToken(locationId: string): Promise<string> {
+        if (!locationId) {
+            console.error("Missing required parameter: location_id");
+            throw new Error("Missing required parameter: location_id");
+        }
+
+        try {
+            const credentials = await this.getCredentials(locationId);
+            // console.log(`${JSON.stringify(credentials)}`);
+
+            if (!credentials) {
+            const errorMsg = `No credentials found for location_id: ${locationId}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+            }
+
+            const { location_id, company_id, access_token, refresh_token, expires_at } = credentials.data;
+
+            if (!access_token || !refresh_token || !expires_at) {
+            throw new Error("Incomplete credentials stored");
+            }
+
+            const currentTime = Date.now();
+            const expiresTime = new Date(expires_at).getTime();
+
+            if (currentTime >= expiresTime) {
+            console.log(`Token expired for location_id: ${locationId}, refreshing...`);
+
+                const newCredentials = await this.refreshAccessToken(locationId);
+
+                return newCredentials.access_token;
+            }
+
+            console.log(`Token still valid for location_id: ${locationId}`);
+            return access_token;
+
+        } catch (err: any) {
+            console.error(`Error ensuring valid token: ${err.message || err.toString()}`);
+            throw new Error(`Error ensuring valid token: ${err.message || err.toString()}`);
+        }
+    }
+
+    async update_credential(credential: {
+        location_id: string;
+        company_id: string;
+        access_token: string;
+        refresh_token: string;
+        expires_at: string;
+    }) {
+        const { location_id, company_id, access_token, refresh_token, expires_at } = credential;
+
+
+        console.log(`Inserting credential for location_id: ${location_id}, company_id: ${company_id}`);
+        try {
+            // Insert new credential
+            const result = this.sql.exec(`
+                REPLACE INTO credentials (location_id, company_id, access_token, refresh_token, expires_at) 
+                VALUES (?, ?, ?, ?, ?)
+            `, location_id, company_id, access_token, refresh_token, expires_at);
+            
+            return {
+                status: ResponseStatus.SUCCESS,
+                httpCode: 201,
+                message: "Credential inserted successfully",
+                data: { insertedId: location_id }
+            };
+        } catch (error) {
+            return {
+                status: ResponseStatus.ERROR,
+                httpCode: 500,
+                errorCode: 'DATABASE_ERROR',
+                message: `Failed to insert credential: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
+
+    async refreshAccessToken(locationId: string): Promise<boolean> {
+        if (!locationId) {
+            console.error("Missing required parameter: location_id");
+            throw new Error("Missing required parameter: location_id");
+        }
+
+        try {
+            const credentials = await this.getCredentials(locationId);
+            // console.log(`${JSON.stringify(credentials)}`);
+            console.log(`Making token request to: ${JSON.stringify(credentials.data.refresh_token)}`);
+
+            if (!credentials || !credentials.data.refresh_token) {
+            const errorMsg = `No refresh token found for location_id: ${locationId}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+            }
+
+            const tokenUrl = "https://services.leadconnectorhq.com/oauth/token";
+
+            const params = new URLSearchParams();
+            params.append("client_id", this.env.GHL_CLIENT_ID); // Replace with env
+            params.append("client_secret", this.env.GHL_CLIENT_SECRET); // Replace with env
+            params.append("grant_type", "refresh_token");
+            params.append("refresh_token", credentials.data.refresh_token);
+            params.append("user_type", "Location");
+
+            console.log(`Refreshing access token for location_id: ${locationId}`);
+
+            const response = await fetch(tokenUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Accept": "application/json",
+            },
+            body: params.toString(),
+            });
+
+            if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to refresh token: ${errorText}`);
+            }
+
+            const tokenData = await response.json();
+
+            const newAccessToken = tokenData.access_token;
+            const newRefreshToken = tokenData.refresh_token;
+            const expiresIn = tokenData.expires_in;
+            const newCompanyId = tokenData.companyId;
+            const newLocationId = tokenData.locationId;
+
+            console.log(`New Access Token: ${newAccessToken?.slice(0, 10) ?? 'None'}...`);
+            console.log(`New Refresh Token: ${newRefreshToken?.slice(0, 10) ?? 'None'}...`);
+            console.log(`Expires In: ${expiresIn}`);
+            console.log(`New Location ID: ${newLocationId}`);
+            console.log(`New Company ID: ${newCompanyId}`);
+
+            if (!newAccessToken || !newRefreshToken || !expiresIn) {
+            const errorMsg = "Incomplete token response from refresh request";
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+            }
+
+            const expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+            await this.update_credential({
+                newLocationId, 
+                newCompanyId,
+                newAccessToken,
+                newRefreshToken,
+                expiresAt,
+            });
+
+            console.log(`Successfully refreshed tokens for location_id: ${locationId}`);
+            return true;
+        } catch (err: any) {
+            console.error(`Error during token refresh: ${err.message || err.toString()}`);
+            throw new Error(`Token refresh failed: ${err.message || err.toString()}`);
+        }
+        }
 }
+
