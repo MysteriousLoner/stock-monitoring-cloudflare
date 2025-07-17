@@ -1,9 +1,12 @@
 import { CredentialsDurableObject } from "./durable-objects/credentials-durable-object";
 import { ResponseBuilder } from "./common-types/response-builder";
-import { EndpointsDurableObject } from './endpoints/endpoints';
+import { 
+    createOAuthInitiateRequestBuilder,
+    createOAuthInitiationService,
+    createOAuthCallbackService
+} from "./services/authentication-service";
 
 export { CredentialsDurableObject };
-export { EndpointsDurableObject };
 
 export default {
     /**
@@ -39,7 +42,11 @@ export default {
             else {
                 const result = await stub.getCredentials();
                 const credentialsDB = [];
-                for (const credential of result.data ?? []) {
+                
+                // Handle the case where result.data might be a single object or array
+                const dataArray = Array.isArray(result.data) ? result.data : [result.data];
+                
+                for (const credential of dataArray ?? []) {
                     credentialsDB.push(JSON.stringify(credential));
                 }
                 for (const credential of credentialsDB) {
@@ -52,6 +59,14 @@ export default {
         if (method === 'GET' && url.pathname === '/getInventory') {
             const url = new URL(request.url);
             const location_id = url.searchParams.get('location_id');
+            
+            if (!location_id) {
+                return ResponseBuilder.build(400, {
+                    status: 'ERROR',
+                    message: 'location_id parameter is required'
+                });
+            }
+            
             const response = await stub.get_inventory(location_id);
             console.log(`Response from get_inventory: ${JSON.stringify(response)}`);
 
@@ -66,49 +81,80 @@ export default {
             }); 
         }
 
-        console.log(`Request URL: ${url.pathname}`);
-        if (url.pathname === '/oauth/initiate') {
-            const id: DurableObjectId = env.ENDPOINTS_DURABLE_OBJECTS.idFromName("oauth_do"); // get the DO instance
-            const stub = env.ENDPOINTS_DURABLE_OBJECTS.get(id);
-
-            // Call the Durable Object's fetch method with a custom path
-            const response = await stub.fetch(request);
-            console.log('[Worker] Received response from DO:', response.status, response.headers.get('location'));
+        // Handle OAuth initiation
+        if (method === 'GET' && url.pathname === '/oauth/initiate') {
+            console.log('OAuth initiation requested');
             
-            return response;
+            const oauthRequest = createOAuthInitiateRequestBuilder()
+                .setDomain(env.DOMAIN)
+                .setClientId(env.GHL_CLIENT_ID!)
+                .setScopes(['products.readonly', 'products/prices.readonly'])
+                .build();
+
+            const oauthService = createOAuthInitiationService();
+            return oauthService.initiateOAuth(oauthRequest);
         }
 
-        if (url.pathname === '/oauth/callback' && request.method === 'GET') {
-            console.log(`${JSON.stringify(request)}`);
-            let id: DurableObjectId = env.ENDPOINTS_DURABLE_OBJECTS.idFromName("oauth_do"); // get the DO instance
-            let stub = env.ENDPOINTS_DURABLE_OBJECTS.get(id);
-            const response = await stub.oauth_callback(request);
+        // Handle OAuth callback
+        if (method === 'GET' && url.pathname === '/oauth/callback') {
+            console.log('OAuth callback received');
+            
+            const callbackService = createOAuthCallbackService(
+                env.GHL_CLIENT_ID!,
+                env.GHL_CLIENT_SECRET!
+            );
 
-            if (response.ok) {
-                const json = await response.json();
-                // console.log(`Location ID: ${json.data?.location_id}`);
-                // console.log(`Company ID: ${json.data?.company_id}`);
-                // console.log(`User Type: ${json.data?.user_type}`);
-                // console.log(`Scope: ${json.data?.company_id}`);
-                // console.log(`Access Code: ${json.data?.access_token}`);
-                // console.log(`Refresh Token: ${json.data?.refresh_token}`);
+            const response = await callbackService.handleCallback(request);
+            
+            // If successful, extract token data and store credentials
+            if (response.status === 200) {
+                try {
+                    // Parse the URL to get the code and exchange it for tokens
+                    const callbackUrl = new URL(request.url);
+                    const authCode = callbackUrl.searchParams.get('code');
+                    
+                    if (authCode) {
+                        // Re-exchange the code to get token data for storage
+                        // (This is a bit redundant but needed to extract the data)
+                        const tokenParams = new URLSearchParams({
+                            client_id: env.GHL_CLIENT_ID!,
+                            client_secret: env.GHL_CLIENT_SECRET!,
+                            grant_type: 'authorization_code',
+                            code: authCode,
+                            user_type: 'Location'
+                        });
 
-                let id: DurableObjectId = env.CREDENTIALS_DURABLE_OBJECT.idFromName("credentials_do");
-                let stub = env.CREDENTIALS_DURABLE_OBJECT.get(id);
+                        const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                            },
+                            body: tokenParams.toString(),
+                        });
 
-                const result = await stub.insertCredential({
-                location_id: json.data.location_id,
-                company_id: json.data.company_id,
-                access_token: json.data.access_token,
-                refresh_token: json.data.refresh_token,
-                expires_at: json.data.expires_in,
-            });
-            } else {
-                const error = await response.text();
-                console.error(`OAuth callback failed: ${error}`);
+                        if (tokenResponse.ok) {
+                            const tokenData = await tokenResponse.json() as any;
+                            
+                            // Store credentials in database
+                            const credentialResult = await stub.insertCredential({
+                                location_id: tokenData.locationId,
+                                company_id: tokenData.companyId,
+                                access_token: tokenData.access_token,
+                                refresh_token: tokenData.refresh_token,
+                                expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
+                                receiverEmails: [] // Default empty array
+                            });
+
+                            console.log('Credentials stored:', credentialResult.status);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error storing credentials:', error);
+                }
             }
 
-            // console.log(`responce: ${json.data.company_id}`);
+            return response;
         }
 
         // Handle POST /credentials - insert new credential
