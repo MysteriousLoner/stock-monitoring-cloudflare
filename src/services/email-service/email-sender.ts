@@ -10,10 +10,7 @@ import {
 
 // Email sender service - Updated to use API key from request
 export class EmailSender {
-    // Remove constructor dependency on API key
-    constructor() {
-        // No longer need API key in constructor
-    }
+    constructor() {}
 
     // Send email to a single recipient
     private async sendSingleEmail(
@@ -26,7 +23,7 @@ export class EmailSender {
         try {
             console.log(`Attempting to send email to: ${receiverEmail}`);
             
-            // Create Resend instance with the provided API key
+            // Create Resend interface instance with the provided API key
             const resend = new Resend(resendApiKey);
             
             const { data, error } = await resend.emails.send({
