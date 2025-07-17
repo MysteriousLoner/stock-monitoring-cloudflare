@@ -18,9 +18,9 @@ export class OAuthCallbackService {
     /**
      * Handles OAuth callback and exchanges authorization code for tokens
      * @param request The incoming request from OAuth provider
-     * @returns HTML response indicating success or failure
+     * @returns Object containing HTML response and token data if successful
      */
-    async handleCallback(request: Request): Promise<Response> {
+    async handleCallback(request: Request): Promise<{ response: Response; tokenData?: OAuthTokenData }> {
         const url = new URL(request.url);
         const authCode = url.searchParams.get('code');
         const state = url.searchParams.get('state');
@@ -33,7 +33,7 @@ export class OAuthCallbackService {
                 message: 'Authorization code not provided',
                 error: 'MISSING_AUTH_CODE'
             };
-            return this.buildHtmlResponse(result);
+            return { response: this.buildHtmlResponse(result) };
         }
 
         try {
@@ -45,7 +45,12 @@ export class OAuthCallbackService {
                 data: tokenData
             };
 
-            return this.buildHtmlResponse(result);
+            console.log(`OAuth callback successful - Location: ${tokenData.locationId}`);
+            
+            return { 
+                response: this.buildHtmlResponse(result),
+                tokenData: tokenData
+            };
 
         } catch (error) {
             console.error('OAuth callback error:', error);
@@ -56,7 +61,7 @@ export class OAuthCallbackService {
                 error: error instanceof Error ? error.message : 'Unknown error'
             };
 
-            return this.buildHtmlResponse(result);
+            return { response: this.buildHtmlResponse(result) };
         }
     }
 

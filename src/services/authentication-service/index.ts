@@ -4,7 +4,7 @@ export * from './oauth-initiate';
 export * from './oauth-callback';
 
 // Import for internal use
-import { createOAuthInitiateRequestBuilder } from './types';
+import { createOAuthInitiateRequestBuilder, OAuthTokenData } from './types';
 import { createOAuthInitiationService } from './oauth-initiate';
 import { createOAuthCallbackService } from './oauth-callback';
 
@@ -80,26 +80,26 @@ export class OAuthHandler {
             this.clientSecret
         );
 
-        const response = await callbackService.handleCallback(request);
+        const callbackResult = await callbackService.handleCallback(request);
         
-        // If successful and credential storage is provided, store the credentials
-        if (response.status === 200 && credentialStorage) {
+        // If successful and credential storage is provided, store the credentials using the token data
+        if (callbackResult.response.status === 200 && credentialStorage && callbackResult.tokenData) {
             try {
-                await this.storeCredentialsFromCallback(request, credentialStorage);
+                await this.storeCredentialsFromTokenData(callbackResult.tokenData, credentialStorage);
             } catch (error) {
                 console.error('Error storing credentials after OAuth callback:', error);
                 // Don't fail the OAuth response even if storage fails
             }
         }
 
-        return response;
+        return callbackResult.response;
     }
 
     /**
-     * Extract token data from callback and store credentials
+     * Store credentials using token data that has already been exchanged
      */
-    private async storeCredentialsFromCallback(
-        request: Request, 
+    private async storeCredentialsFromTokenData(
+        tokenData: OAuthTokenData,
         credentialStorage: {
             insertCredential: (credential: {
                 location_id: string;
@@ -111,50 +111,23 @@ export class OAuthHandler {
             }) => Promise<any>;
         }
     ): Promise<void> {
-        // Parse the URL to get the authorization code
-        const callbackUrl = new URL(request.url);
-        const authCode = callbackUrl.searchParams.get('code');
-        
-        if (!authCode) {
-            throw new Error('No authorization code found in callback');
-        }
-
-        // Exchange authorization code for tokens
-        const tokenParams = new URLSearchParams({
-            client_id: this.clientId,
-            client_secret: this.clientSecret,
-            grant_type: 'authorization_code',
-            code: authCode,
-            user_type: 'Location'
-        });
-
-        const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
-            method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: tokenParams.toString(),
-        });
-
-        if (!tokenResponse.ok) {
-            const errorText = await tokenResponse.text();
-            throw new Error(`Token exchange failed: ${tokenResponse.status} - ${errorText}`);
-        }
-
-        const tokenData = await tokenResponse.json() as any;
-        
-        // Store credentials in the provided storage
+        // Store credentials using the already-exchanged token data
         const credentialResult = await credentialStorage.insertCredential({
             location_id: tokenData.locationId,
-            company_id: tokenData.companyId,
+            company_id: tokenData.companyId || '',
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
             expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
             receiverEmails: [] // Default empty array
         });
-
-        console.log('Credentials stored successfully:', credentialResult.status);
+        console.log('Credential api status:', credentialResult.status);
+        console.log('Credential store message:', credentialResult.message);
+        if (credentialResult.status === "ERROR") {
+            console.error('Failed to store credentials:', credentialResult.message);
+            throw new Error(`Failed to store credentials: ${credentialResult.message}`);
+        } else {
+            console.log('Credentials stored successfully:', credentialResult.status);
+        }
     }
 }
 

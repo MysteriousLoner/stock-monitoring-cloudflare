@@ -9,15 +9,15 @@ export class CredentialsDurableObject extends DurableObject<Env> {
         this.sql = ctx.storage.sql;
         
         // Drop the existing table and create new one with receiverEmails column
-        // this.sql.exec(`DROP TABLE IF EXISTS credentials;`);
-        
-        this.sql.exec(`CREATE TABLE credentials(
+        this.sql.exec(`DROP TABLE IF EXISTS credentials;`);
+
+        this.sql.exec(`CREATE TABLE IF NOT EXISTS credentials(
             location_id TEXT PRIMARY KEY,
             company_id TEXT,
             access_token TEXT,
             refresh_token TEXT,
             expires_at TIMESTAMP,
-            receiverEmails TEXT DEFAULT '[]'
+            receiver_emails TEXT DEFAULT '[]'
         );`);
     }
 
@@ -97,9 +97,9 @@ export class CredentialsDurableObject extends DurableObject<Env> {
         access_token: string;
         refresh_token: string;
         expires_at: string;
-        receiverEmails?: string[]; // Optional for backward compatibility
+        receiver_emails?: string[]; // Optional for backward compatibility
     }) {
-        const { location_id, company_id, access_token, refresh_token, expires_at, receiverEmails = [] } = credential;
+        const { location_id, company_id, access_token, refresh_token, expires_at, receiver_emails = [] } = credential;
 
         console.log(`Inserting credential for location_id: ${location_id}, company_id: ${company_id}`);
         try {
@@ -117,13 +117,13 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             }
 
             // Convert receiverEmails array to JSON string
-            const receiverEmailsJson = this.arrayToJson(receiverEmails);
+            const receiver_emails_json = this.arrayToJson(receiver_emails);
 
             // Insert new credential with receiverEmails
             const result = this.sql.exec(`
-                INSERT OR REPLACE INTO credentials (location_id, company_id, access_token, refresh_token, expires_at, receiverEmails) 
+                INSERT OR REPLACE INTO credentials (location_id, company_id, access_token, refresh_token, expires_at, receiver_emails) 
                 VALUES (?, ?, ?, ?, ?, ?)
-            `, location_id, company_id, access_token, refresh_token, expires_at, receiverEmailsJson);
+            `, location_id, company_id, access_token, refresh_token, expires_at, receiver_emails_json);
             
             return {
                 status: ResponseStatus.SUCCESS,
