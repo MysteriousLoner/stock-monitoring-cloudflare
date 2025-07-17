@@ -140,6 +140,7 @@ export default {
             return ResponseBuilder.build(result.httpCode, result);
         }
 
+        // deletes the entire row of the selected location id. requires app password to execute.
         if (method === 'DELETE' && url.pathname.startsWith('/credentials/')) {
             const location_id = url.pathname.split('/').pop();
             console.log(`Deleting credential for location_id: ${location_id}`);
