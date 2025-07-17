@@ -56,6 +56,7 @@ export class OAuthHandler {
             .build();
 
         const oauthService = createOAuthInitiationService();
+        // reditrects to external auth provider
         return oauthService.initiateOAuth(oauthRequest);
     }
 
@@ -71,7 +72,7 @@ export class OAuthHandler {
                 access_token: string;
                 refresh_token: string;
                 expires_at: string;
-                receiverEmails: string[];
+                receiver_emails: string[];
             }) => Promise<any>;
         }
     ): Promise<Response> {
@@ -107,7 +108,7 @@ export class OAuthHandler {
                 access_token: string;
                 refresh_token: string;
                 expires_at: string;
-                receiverEmails: string[];
+                receiver_emails: string[];
             }) => Promise<any>;
         }
     ): Promise<void> {
@@ -118,7 +119,7 @@ export class OAuthHandler {
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
             expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-            receiverEmails: [] // Default empty array
+            receiver_emails: [] // Default empty array
         });
         console.log('Credential api status:', credentialResult.status);
         console.log('Credential store message:', credentialResult.message);
