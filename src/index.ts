@@ -1,10 +1,6 @@
 import { CredentialsDurableObject } from "./durable-objects/credentials-durable-object";
 import { ResponseBuilder } from "./common-types/response-builder";
-import { 
-    createOAuthInitiateRequestBuilder,
-    createOAuthInitiationService,
-    createOAuthCallbackService
-} from "./services/authentication-service";
+import { createOAuthHandler } from "./services/authentication-service";
 
 export { CredentialsDurableObject };
 
@@ -85,76 +81,32 @@ export default {
         if (method === 'GET' && url.pathname === '/oauth/initiate') {
             console.log('OAuth initiation requested');
             
-            const oauthRequest = createOAuthInitiateRequestBuilder()
-                .setDomain(env.DOMAIN)
-                .setClientId(env.GHL_CLIENT_ID!)
-                .setScopes(['products.readonly', 'products/prices.readonly'])
-                .build();
-
-            const oauthService = createOAuthInitiationService();
-            return oauthService.initiateOAuth(oauthRequest);
+            const oauthHandler = createOAuthHandler(
+                env.GHL_CLIENT_ID!,
+                env.GHL_CLIENT_SECRET!,
+                env.DOMAIN,
+                ['products.readonly', 'products/prices.readonly']
+            );
+            
+            return oauthHandler.handleInitiation();
         }
 
         // Handle OAuth callback
         if (method === 'GET' && url.pathname === '/oauth/callback') {
             console.log('OAuth callback received');
             
-            const callbackService = createOAuthCallbackService(
+            const oauthHandler = createOAuthHandler(
                 env.GHL_CLIENT_ID!,
-                env.GHL_CLIENT_SECRET!
+                env.GHL_CLIENT_SECRET!,
+                env.DOMAIN
             );
-
-            const response = await callbackService.handleCallback(request);
             
-            // If successful, extract token data and store credentials
-            if (response.status === 200) {
-                try {
-                    // Parse the URL to get the code and exchange it for tokens
-                    const callbackUrl = new URL(request.url);
-                    const authCode = callbackUrl.searchParams.get('code');
-                    
-                    if (authCode) {
-                        // Re-exchange the code to get token data for storage
-                        // (This is a bit redundant but needed to extract the data)
-                        const tokenParams = new URLSearchParams({
-                            client_id: env.GHL_CLIENT_ID!,
-                            client_secret: env.GHL_CLIENT_SECRET!,
-                            grant_type: 'authorization_code',
-                            code: authCode,
-                            user_type: 'Location'
-                        });
-
-                        const tokenResponse = await fetch('https://services.leadconnectorhq.com/oauth/token', {
-                            method: 'POST',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/x-www-form-urlencoded',
-                            },
-                            body: tokenParams.toString(),
-                        });
-
-                        if (tokenResponse.ok) {
-                            const tokenData = await tokenResponse.json() as any;
-                            
-                            // Store credentials in database
-                            const credentialResult = await stub.insertCredential({
-                                location_id: tokenData.locationId,
-                                company_id: tokenData.companyId,
-                                access_token: tokenData.access_token,
-                                refresh_token: tokenData.refresh_token,
-                                expires_at: new Date(Date.now() + tokenData.expires_in * 1000).toISOString(),
-                                receiverEmails: [] // Default empty array
-                            });
-
-                            console.log('Credentials stored:', credentialResult.status);
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error storing credentials:', error);
+            // Pass the credential storage interface to the handler
+            return oauthHandler.handleCallback(request, {
+                insertCredential: async (credential) => {
+                    return await stub.insertCredential(credential);
                 }
-            }
-
-            return response;
+            });
         }
 
         // Handle POST /credentials - insert new credential

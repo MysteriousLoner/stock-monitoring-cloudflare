@@ -24,6 +24,36 @@ src/services/authentication-service/
 
 ## Quick Start
 
+### Option 1: Using the Complete OAuth Handler (Recommended)
+
+```typescript
+import { createOAuthHandler } from './services/authentication-service';
+
+// Create OAuth handler
+const oauthHandler = createOAuthHandler(
+    env.GHL_CLIENT_ID,
+    env.GHL_CLIENT_SECRET,
+    'https://your-worker.workers.dev',
+    ['products.readonly', 'products/prices.readonly']
+);
+
+// Handle initiation
+if (url.pathname === '/oauth/initiate') {
+    return oauthHandler.handleInitiation();
+}
+
+// Handle callback with automatic credential storage
+if (url.pathname === '/oauth/callback') {
+    return oauthHandler.handleCallback(request, {
+        insertCredential: async (credential) => {
+            return await stub.insertCredential(credential);
+        }
+    });
+}
+```
+
+### Option 2: Manual Service Usage
+
 ### 1. OAuth Initiation (Redirect to External Auth)
 
 ```typescript
@@ -57,7 +87,48 @@ return callbackService.handleCallback(request);
 
 ## Integration with Your Worker
 
-### Update Your Main Worker (`src/index.ts`)
+### Simplified Integration with Complete OAuth Handler
+
+```typescript
+import { createOAuthHandler } from "./services/authentication-service";
+
+export default {
+    async fetch(request, env, ctx): Promise<Response> {
+        const url = new URL(request.url);
+        const method = request.method;
+
+        // Create Durable Object stub for credential storage
+        const id = env.CREDENTIALS_DURABLE_OBJECT.idFromName("credentials_do");
+        const stub = env.CREDENTIALS_DURABLE_OBJECT.get(id);
+
+        // Create OAuth handler once
+        const oauthHandler = createOAuthHandler(
+            env.GHL_CLIENT_ID,
+            env.GHL_CLIENT_SECRET,
+            env.DOMAIN,
+            ['products.readonly', 'products/prices.readonly']
+        );
+
+        // OAuth initiation endpoint
+        if (method === 'GET' && url.pathname === '/oauth/initiate') {
+            return oauthHandler.handleInitiation();
+        }
+
+        // OAuth callback endpoint with automatic credential storage
+        if (method === 'GET' && url.pathname === '/oauth/callback') {
+            return oauthHandler.handleCallback(request, {
+                insertCredential: async (credential) => {
+                    return await stub.insertCredential(credential);
+                }
+            });
+        }
+
+        // ... other routes
+    }
+}
+```
+
+### Manual Integration (Advanced Usage)
 
 ```typescript
 import { 
@@ -92,7 +163,7 @@ if (method === 'GET' && url.pathname === '/oauth/callback') {
     // Store credentials if successful
     if (response.status === 200) {
         // Extract token data and store in your database
-        // See example-call.ts for complete implementation
+        // See examples section for complete implementation
     }
 
     return response;
@@ -123,6 +194,12 @@ GHL_CLIENT_SECRET=your-client-secret
 
 ## API Reference
 
+### Classes
+
+- `OAuthHandler` - Complete OAuth handler that encapsulates the entire flow
+  - `handleInitiation()` - Handles OAuth initiation and redirects
+  - `handleCallback(request, credentialStorage?)` - Handles OAuth callbacks with optional credential storage
+
 ### Interfaces
 
 - `OAuthInitiateRequest` - Parameters for OAuth initiation
@@ -137,6 +214,10 @@ GHL_CLIENT_SECRET=your-client-secret
 ### Builders
 
 - `OAuthInitiateRequestBuilder` - Fluent API for building OAuth requests
+
+### Factory Functions
+
+- `createOAuthHandler(clientId, clientSecret, domain, scopes?)` - Creates a complete OAuth handler
 
 ## Error Handling
 
@@ -172,7 +253,67 @@ The service provides comprehensive error handling:
 
 ## Examples
 
-### Example 1: Basic OAuth Initiation
+### Example 1: Complete OAuth Handler (Recommended)
+
+```typescript
+import { createOAuthHandler } from './services/authentication-service';
+
+export async function handleOAuthWithHandler(request: Request, env: Env, stub: any): Promise<Response> {
+    const url = new URL(request.url);
+    
+    // Create OAuth handler
+    const oauthHandler = createOAuthHandler(
+        env.GHL_CLIENT_ID,
+        env.GHL_CLIENT_SECRET,
+        env.DOMAIN,
+        ['products.readonly', 'products/prices.readonly']
+    );
+
+    // Handle initiation
+    if (url.pathname === '/oauth/initiate') {
+        return oauthHandler.handleInitiation();
+    }
+
+    // Handle callback with automatic credential storage
+    if (url.pathname === '/oauth/callback') {
+        return oauthHandler.handleCallback(request, {
+            insertCredential: async (credential) => {
+                console.log('Storing credential for location:', credential.location_id);
+                return await stub.insertCredential(credential);
+            }
+        });
+    }
+
+    return new Response('Not Found', { status: 404 });
+}
+```
+
+### Example 2: OAuth Handler Without Credential Storage
+
+```typescript
+export async function handleOAuthBasic(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    
+    const oauthHandler = createOAuthHandler(
+        env.GHL_CLIENT_ID,
+        env.GHL_CLIENT_SECRET,
+        env.DOMAIN
+    );
+
+    if (url.pathname === '/oauth/initiate') {
+        return oauthHandler.handleInitiation();
+    }
+
+    if (url.pathname === '/oauth/callback') {
+        // Handle callback without automatic storage
+        return oauthHandler.handleCallback(request);
+    }
+
+    return new Response('Not Found', { status: 404 });
+}
+```
+
+### Example 3: Basic OAuth Initiation (Manual)
 
 ```typescript
 import { createOAuthInitiateRequestBuilder, createOAuthInitiationService } from './services/authentication-service';
