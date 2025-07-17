@@ -435,5 +435,61 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             expires_at: credential.expires_at
         });
     }
+
+    /**
+     * Updates only the token pair (access_token, refresh_token, expires_at) for a location
+     * @param locationId - The location ID to update
+     * @param newAccessToken - The new access token
+     * @param newRefreshToken - The new refresh token
+     * @param expiresAt - The new expiration date
+     * @returns Success result with status information
+     */
+    async updateTokenPair(locationId: string, newAccessToken: string, newRefreshToken: string, expiresAt: string) {
+        try {
+            if (!locationId || !newAccessToken || !newRefreshToken || !expiresAt) {
+                return {
+                    success: false,
+                    message: 'Missing required parameters: locationId, newAccessToken, newRefreshToken, or expiresAt'
+                };
+            }
+
+            // Check if credential exists
+            const existing = this.sql.exec("SELECT 1 FROM credentials WHERE location_id = ?", locationId);
+            if (!existing.one()) {
+                return {
+                    success: false,
+                    message: `Credential with location_id '${locationId}' not found`
+                };
+            }
+
+            // Update only the token-related fields
+            this.sql.exec(`
+                UPDATE credentials 
+                SET access_token = ?, refresh_token = ?, expires_at = ? 
+                WHERE location_id = ?
+            `, newAccessToken, newRefreshToken, expiresAt, locationId);
+
+            console.log(`Successfully updated token pair for location_id: ${locationId}`);
+            console.log(`New Access Token: ${newAccessToken?.slice(0, 10) ?? 'None'}...`);
+            console.log(`New Refresh Token: ${newRefreshToken?.slice(0, 10) ?? 'None'}...`);
+            console.log(`New Expires At: ${expiresAt}`);
+
+            return {
+                success: true,
+                message: 'Token pair updated successfully',
+                data: {
+                    location_id: locationId,
+                    expires_at: expiresAt
+                }
+            };
+
+        } catch (error) {
+            console.error('Error updating token pair:', error);
+            return {
+                success: false,
+                message: `Failed to update token pair: ${error instanceof Error ? error.message : 'Unknown error'}`
+            };
+        }
+    }
 }
 
