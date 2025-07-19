@@ -124,7 +124,7 @@ export default {
         }
 
         // Inventory summary endpoint using the simplified inventory service
-        if (method === 'GET' && url.pathname === '/getInventory') {
+        if (method === 'GET' && url.pathname === '/test/getInventory') {
             const location_id = url.searchParams.get('location_id');
             
             if (!location_id) {
