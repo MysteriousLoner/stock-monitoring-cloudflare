@@ -8,7 +8,7 @@ export class CredentialsDurableObject extends DurableObject<Env> {
         super(ctx, env);
         this.sql = ctx.storage.sql;
         
-        // Drop the existing table and create new one with receiverEmails column
+        // Drop the existing table and create new one with receiver_emails column
         // this.sql.exec(`DROP TABLE IF EXISTS credentials;`);
 
         this.sql.exec(`CREATE TABLE IF NOT EXISTS credentials(
@@ -50,10 +50,10 @@ export class CredentialsDurableObject extends DurableObject<Env> {
                     };
                 }
 
-                // Convert receiverEmails back to array
+                // Convert receiver_emails back to array
                 const processedResult = {
                     ...result,
-                    receiverEmails: this.jsonToArray(result.receiverEmails as string)
+                    receiverEmails: this.jsonToArray(result.receiver_emails as string)
                 };
 
                 return {
@@ -67,10 +67,10 @@ export class CredentialsDurableObject extends DurableObject<Env> {
                 const results = this.sql.exec("SELECT * FROM credentials");
                 const data = results.toArray();
 
-                // Process all results to convert receiverEmails
+                // Process all results to convert receiver_emails
                 const processedData = data.map(result => ({
                     ...result,
-                    receiverEmails: this.jsonToArray(result.receiverEmails as string)
+                    receiverEmails: this.jsonToArray(result.receiver_emails as string)
                 }));
 
                 return {
@@ -158,7 +158,7 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             const receiverEmailsJson = this.arrayToJson(receiverEmails);
             
             this.sql.exec(
-                "UPDATE credentials SET receiverEmails = ? WHERE location_id = ?", 
+                "UPDATE credentials SET receiver_emails = ? WHERE location_id = ?", 
                 receiverEmailsJson, 
                 location_id
             );

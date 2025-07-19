@@ -2,6 +2,7 @@ import { CredentialsDurableObject } from "./durable-objects/credentials-durable-
 import { ResponseBuilder } from "./common-types/response-builder";
 import { createOAuthHandler } from "./services/authentication-service";
 import { createInventoryQueryService } from "./services/inventory-query-service";
+import { createEmailUpdateService } from "./services/email-update-service";
 
 export { CredentialsDurableObject };
 
@@ -160,6 +161,44 @@ export default {
                     status: 'ERROR',
                     message: 'Internal server error during inventory query',
                     error: error instanceof Error ? error.message : 'Unknown error'
+                });
+            }
+        }
+
+        // Update receiver emails endpoint
+        if (method === 'POST' && url.pathname === '/updateEmail') {
+            try {
+                const body = await request.json() as any;
+                
+                // Create email update service
+                const emailUpdateService = createEmailUpdateService(
+                    stub,
+                    env.APP_PASSWORD!
+                );
+
+                // Process the update request
+                const result = await emailUpdateService.updateReceiverEmails({
+                    locationId: body.locationId,
+                    appPassword: body.appPassword,
+                    emailList: body.emailList
+                });
+
+                // Return appropriate HTTP status based on result
+                const httpStatus = result.status === 'SUCCESS' ? 200 : 
+                                  result.errorCode === 'INVALID_PASSWORD' ? 401 :
+                                  result.errorCode === 'MISSING_LOCATION_ID' || 
+                                  result.errorCode === 'MISSING_PASSWORD' || 
+                                  result.errorCode === 'INVALID_EMAIL_LIST' ||
+                                  result.errorCode === 'INVALID_EMAIL_FORMAT' ? 400 : 500;
+
+                return ResponseBuilder.build(httpStatus, result);
+
+            } catch (error) {
+                console.error('Error in update email endpoint:', error);
+                return ResponseBuilder.build(400, {
+                    status: 'ERROR',
+                    errorCode: 'INVALID_REQUEST',
+                    message: 'Invalid JSON in request body'
                 });
             }
         }
