@@ -9,7 +9,7 @@ export class CredentialsDurableObject extends DurableObject<Env> {
         this.sql = ctx.storage.sql;
         
         // Drop the existing table and create new one with receiverEmails column
-        this.sql.exec(`DROP TABLE IF EXISTS credentials;`);
+        // this.sql.exec(`DROP TABLE IF EXISTS credentials;`);
 
         this.sql.exec(`CREATE TABLE IF NOT EXISTS credentials(
             location_id TEXT PRIMARY KEY,

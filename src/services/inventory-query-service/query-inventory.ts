@@ -26,6 +26,7 @@ export interface InventorySummary {
     unique_products: number;
     items_with_stock: number;
     items_out_of_stock: number;
+    out_of_stock_products: string[];
 }
 
 export class InventoryQueryService {
@@ -74,13 +75,24 @@ export class InventoryQueryService {
             const itemsWithStock = items.filter(item => (item.availableQuantity || 0) > 0).length;
             const itemsOutOfStock = items.filter(item => (item.availableQuantity || 0) === 0).length;
             
+            // Get list of out-of-stock product names (combining product name + variant name)
+            const outOfStockProducts = items
+                .filter(item => (item.availableQuantity || 0) === 0)
+                .map(item => {
+                    const productName = item.productName || 'Unknown Product';
+                    const variantName = item.name || '';
+                    return variantName ? `${productName} - ${variantName}` : productName;
+                })
+                .sort(); // Sort alphabetically
+            
             const summary: InventorySummary = {
                 location_id: locationId,
                 total_items: totalCount,
                 total_available_quantity: totalAvailable,
                 unique_products: uniqueProducts,
                 items_with_stock: itemsWithStock,
-                items_out_of_stock: itemsOutOfStock
+                items_out_of_stock: itemsOutOfStock,
+                out_of_stock_products: outOfStockProducts
             };
             
             console.log(`Generated inventory summary for location_id: ${locationId}`);
@@ -165,7 +177,7 @@ export class InventoryQueryService {
             const inventoryData = await inventoryResponse.json() as any;
             
             console.log(`Successfully retrieved ${inventoryData.inventory?.length || 0} items for location_id: ${locationId}`);
-            
+            console.log("Inventory data details: ", JSON.stringify(inventoryData));
             return inventoryData;
             
         } catch (error) {
