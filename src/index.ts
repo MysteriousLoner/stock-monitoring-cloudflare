@@ -1,6 +1,7 @@
 import { CredentialsDurableObject } from "./durable-objects/credentials-durable-object";
 import { ResponseBuilder } from "./common-types/response-builder";
 import { createOAuthHandler } from "./services/authentication-service";
+import { createInventoryQueryService } from "./services/inventory-query-service";
 
 export { CredentialsDurableObject };
 
@@ -26,8 +27,49 @@ export default {
         // Object instance.
         const stub = env.CREDENTIALS_DURABLE_OBJECT.get(id);
 
+        /**
+         * Oauth endpoints start. -----------------------------------------------------
+         */
+        // Handle OAuth initiation
+        if (method === 'GET' && url.pathname === '/oauth/initiate') {
+            console.log('OAuth initiation requested');
+            
+            const oauthHandler = createOAuthHandler(
+                env.GHL_CLIENT_ID!,
+                env.GHL_CLIENT_SECRET!,
+                env.DOMAIN,
+                ['products.readonly', 'products/prices.readonly']
+            );
+            
+            return oauthHandler.handleInitiation();
+        }
+        
+        // Handle OAuth callback
+        if (method === 'GET' && url.pathname === '/oauth/callback') {
+            console.log('OAuth callback received');
+            
+            const oauthHandler = createOAuthHandler(
+                env.GHL_CLIENT_ID!,
+                env.GHL_CLIENT_SECRET!,
+                env.DOMAIN
+            );
+            
+            // Pass the credential storage interface to the handler
+            return oauthHandler.handleCallback(request, {
+                insertCredential: async (credential) => {
+                    return await stub.insertCredential(credential);
+                }
+            });
+        }
+        /**
+         * Oauth endpoints end. -----------------------------------------------------
+         */
+        
+        /**
+         * Test endpoints start. -----------------------------------------------------
+         */
         // Handle GET /credentials - return all credentials
-        if (method === 'GET' && url.pathname === '/credentials') {
+        if (method === 'GET' && url.pathname === '/test/show-all-credentials') {
             const url = new URL(request.url);
             const location_id = url.searchParams.get('location_id');
             if (location_id) {
@@ -52,65 +94,8 @@ export default {
             }
         }
 
-        if (method === 'GET' && url.pathname === '/getInventory') {
-            const url = new URL(request.url);
-            const location_id = url.searchParams.get('location_id');
-            
-            if (!location_id) {
-                return ResponseBuilder.build(400, {
-                    status: 'ERROR',
-                    message: 'location_id parameter is required'
-                });
-            }
-            
-            const response = await stub.get_inventory(location_id);
-            console.log(`Response from get_inventory: ${JSON.stringify(response)}`);
-
-            return new Response (response.body, {
-                status: response.status,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Access-Control-Allow-Origin': '*',
-                    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-                    'Access-Control-Allow-Headers': 'Content-Type',
-                },
-            }); 
-        }
-
-        // Handle OAuth initiation
-        if (method === 'GET' && url.pathname === '/oauth/initiate') {
-            console.log('OAuth initiation requested');
-            
-            const oauthHandler = createOAuthHandler(
-                env.GHL_CLIENT_ID!,
-                env.GHL_CLIENT_SECRET!,
-                env.DOMAIN,
-                ['products.readonly', 'products/prices.readonly']
-            );
-            
-            return oauthHandler.handleInitiation();
-        }
-
-        // Handle OAuth callback
-        if (method === 'GET' && url.pathname === '/oauth/callback') {
-            console.log('OAuth callback received');
-            
-            const oauthHandler = createOAuthHandler(
-                env.GHL_CLIENT_ID!,
-                env.GHL_CLIENT_SECRET!,
-                env.DOMAIN
-            );
-            
-            // Pass the credential storage interface to the handler
-            return oauthHandler.handleCallback(request, {
-                insertCredential: async (credential) => {
-                    return await stub.insertCredential(credential);
-                }
-            });
-        }
-
         // Handle POST /credentials - insert new credential
-        if (method === 'POST' && url.pathname === '/credentials') {
+        if (method === 'POST' && url.pathname === '/test/remove-credentials') {
             const body = await request.json() as any;
             
             // Validate required fields
@@ -138,21 +123,49 @@ export default {
             return ResponseBuilder.build(result.httpCode, result);
         }
 
-        // deletes the entire row of the selected location id. requires app password to execute.
-        if (method === 'DELETE' && url.pathname.startsWith('/credentials/')) {
-            const location_id = url.pathname.split('/').pop();
-            console.log(`Deleting credential for location_id: ${location_id}`);
+        // Inventory summary endpoint using the simplified inventory service
+        if (method === 'GET' && url.pathname === '/getInventory') {
+            const location_id = url.searchParams.get('location_id');
+            
             if (!location_id) {
                 return ResponseBuilder.build(400, {
                     status: 'ERROR',
-                    errorCode: 'MISSING_LOCATION_ID',
-                    message: 'Location ID is required'
+                    message: 'location_id parameter is required'
                 });
             }
 
-            const result = await stub.deleteCredential(location_id);
-            return ResponseBuilder.build(result.httpCode, result);
+            try {
+                // Create inventory query service
+                const inventoryService = createInventoryQueryService(
+                    stub,
+                    env.GHL_CLIENT_ID!,
+                    env.GHL_CLIENT_SECRET!
+                );
+
+                // Get inventory summary
+                const summary = await inventoryService.queryInventorySummary(location_id);
+
+                console.log(`Inventory summary result: location=${summary.location_id}, total=${summary.total_items}, available=${summary.total_available_quantity}`);
+
+                // Return formatted response
+                return ResponseBuilder.build(200, {
+                    status: 'SUCCESS',
+                    message: `Successfully retrieved inventory summary for location ${location_id}`,
+                    data: summary
+                });
+
+            } catch (error) {
+                console.error('Error in inventory summary endpoint:', error);
+                return ResponseBuilder.build(500, {
+                    status: 'ERROR',
+                    message: 'Internal server error during inventory query',
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                });
+            }
         }
+        /**
+         * Test endpoints end. -----------------------------------------------------
+         */
 
         // Handle OPTIONS request for CORS
         if (method === 'OPTIONS') {

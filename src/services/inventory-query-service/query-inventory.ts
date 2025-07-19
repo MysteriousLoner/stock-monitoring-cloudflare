@@ -1,16 +1,32 @@
 /**
  * Inventory Query Service
- * Handles inventory queries with automatic token management and filtering
+ * Handles inventory queries with automatic token management
+ * Simplified interface based on Python implementation
  */
 
 import { createTokenValidator } from '../../utils/token-management/token-validator';
-import {
-    InventoryQueryRequest,
-    InventoryQueryResult,
-    InventoryItem,
-    InventoryCredentials,
-    createInventoryQueryResultBuilder
-} from './types';
+
+// Simplified interfaces for the new implementation
+export interface InventoryItem {
+    product?: string;
+    availableQuantity?: number;
+    [key: string]: any; // Allow other properties from API
+}
+
+export interface InventoryResponse {
+    inventory: InventoryItem[];
+    total: Array<{ total: number }>;
+    traceId?: string;
+}
+
+export interface InventorySummary {
+    location_id: string;
+    total_items: number;
+    total_available_quantity: number;
+    unique_products: number;
+    items_with_stock: number;
+    items_out_of_stock: number;
+}
 
 export class InventoryQueryService {
     private credentialsStub: any;
@@ -25,71 +41,149 @@ export class InventoryQueryService {
     }
 
     /**
-     * Query inventory for a location with automatic token management
-     * @param request - The inventory query request
-     * @returns InventoryQueryResult with items and metadata
+     * Get a summary of inventory for a location (PUBLIC METHOD)
+     * 
+     * @param locationId - The location ID to get summary for
+     * @returns Promise<InventorySummary> - Summary information about the inventory
+     * @throws Error if locationId is missing or API requests fail
      */
-    async queryInventory(request: InventoryQueryRequest): Promise<InventoryQueryResult> {
-        const resultBuilder = createInventoryQueryResultBuilder()
-            .setLocationId(request.locationId);
+    async queryInventorySummary(locationId: string): Promise<InventorySummary> {
+        if (!locationId) {
+            const errorMsg = "Missing required parameter: location_id";
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+        }
 
         try {
-            // Step 1: Get and validate credentials with automatic token refresh
-            const credentials = await this.getValidCredentials(request.locationId);
-            if (!credentials) {
-                return resultBuilder
-                    .setError('Failed to obtain valid credentials')
-                    .build();
-            }
-
-            // Step 2: Get total count of items
-            const totalCount = await this.getTotalItemCount(credentials, request.locationId);
-            if (totalCount === null) {
-                return resultBuilder
-                    .setError('Failed to get total item count')
-                    .build();
-            }
-
-            resultBuilder.setTotalCount(totalCount);
-
-            if (totalCount === 0) {
-                return resultBuilder
-                    .setMessage('No inventory items found for this location')
-                    .build();
-            }
-
-            // Step 3: Fetch all items with the actual count
-            const allItems = await this.fetchAllItems(credentials, request.locationId, totalCount);
-            if (!allItems) {
-                return resultBuilder
-                    .setError('Failed to fetch inventory items')
-                    .build();
-            }
-
-            // Step 4: Apply filters if any
-            const filteredItems = this.applyFilters(allItems, request.filters || {});
-
-            // Step 5: Apply pagination
-            const paginatedItems = this.applyPagination(filteredItems, request.limit || 100, request.offset || 0);
-
-            return resultBuilder
-                .setItems(paginatedItems)
-                .setTotalCount(totalCount)
-                .setMessage(`Successfully retrieved ${paginatedItems.length} items`)
-                .build();
-
+            console.log(`Getting inventory summary for location_id: ${locationId}`);
+            
+            // Get full inventory data
+            const inventoryData = await this.getInventory(locationId);
+            
+            const items = inventoryData.inventory || [];
+            const totalCount = inventoryData.total?.[0]?.total || 0;
+            
+            // Calculate summary statistics
+            const totalAvailable = items.reduce((sum, item) => sum + (item.availableQuantity || 0), 0);
+            const uniqueProducts = new Set(
+                items
+                    .map(item => item.product)
+                    .filter(product => product)
+            ).size;
+            
+            const itemsWithStock = items.filter(item => (item.availableQuantity || 0) > 0).length;
+            const itemsOutOfStock = items.filter(item => (item.availableQuantity || 0) === 0).length;
+            
+            const summary: InventorySummary = {
+                location_id: locationId,
+                total_items: totalCount,
+                total_available_quantity: totalAvailable,
+                unique_products: uniqueProducts,
+                items_with_stock: itemsWithStock,
+                items_out_of_stock: itemsOutOfStock
+            };
+            
+            console.log(`Generated inventory summary for location_id: ${locationId}`);
+            return summary;
+            
         } catch (error) {
-            console.error('Error in queryInventory:', error);
-            return resultBuilder
-                .setError(`Inventory query failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-                .build();
+            const errorMsg = `Error generating inventory summary: ${error instanceof Error ? error.message : 'Unknown error'}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
         }
     }
 
     /**
-     * Get valid credentials with automatic token refresh
+     * Get all inventory items for a location (PRIVATE METHOD)
+     * 
+     * @param locationId - The location ID to get inventory for
+     * @returns Promise<InventoryResponse> - Complete inventory response with all items
+     * @throws Error if API requests fail
      */
-    private async getValidCredentials(locationId: string): Promise<InventoryCredentials | null> {
+    private async getInventory(locationId: string): Promise<InventoryResponse> {
+        try {
+            // Ensure we have a valid access token
+            const accessToken = await this.ensureValidToken(locationId);
+            
+            // Common headers
+            const headers = {
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+                'Version': '2021-07-28'
+            };
+            
+            // Step 1: Get total count
+            console.log(`Getting total inventory count for location_id: ${locationId}`);
+            
+            const countParams = new URLSearchParams({
+                limit: "0",
+                altId: locationId,
+                altType: "location"
+            });
+            
+            const countResponse = await fetch(`${this.baseUrl}?${countParams}`, { headers });
+            
+            if (!countResponse.ok) {
+                const errorText = await countResponse.text();
+                throw new Error(`API request failed: ${countResponse.status} - ${errorText}`);
+            }
+            
+            const countData = await countResponse.json() as any;
+            
+            // Extract total count
+            let totalItems = 0;
+            if (countData.total && countData.total.length > 0) {
+                totalItems = countData.total[0].total || 0;
+            }
+            
+            console.log(`Found ${totalItems} total items for location_id: ${locationId}`);
+            
+            if (totalItems === 0) {
+                return {
+                    inventory: [],
+                    total: [{ total: 0 }],
+                    traceId: countData.traceId || ''
+                };
+            }
+            
+            // Step 2: Get all items
+            console.log(`Fetching all ${totalItems} inventory items for location_id: ${locationId}`);
+            
+            const allParams = new URLSearchParams({
+                limit: String(totalItems),
+                altId: locationId,
+                altType: "location"
+            });
+            
+            const inventoryResponse = await fetch(`${this.baseUrl}?${allParams}`, { headers });
+            
+            if (!inventoryResponse.ok) {
+                const errorText = await inventoryResponse.text();
+                throw new Error(`API request failed: ${inventoryResponse.status} - ${errorText}`);
+            }
+            
+            const inventoryData = await inventoryResponse.json() as any;
+            
+            console.log(`Successfully retrieved ${inventoryData.inventory?.length || 0} items for location_id: ${locationId}`);
+            
+            return inventoryData;
+            
+        } catch (error) {
+            if (error instanceof Error) {
+                console.error(`API request failed: ${error.message}`);
+                throw new Error(`API request failed: ${error.message}`);
+            } else {
+                const errorMsg = `Unexpected error getting inventory: ${String(error)}`;
+                console.error(errorMsg);
+                throw new Error(errorMsg);
+            }
+        }
+    }
+
+    /**
+     * Ensure we have a valid access token with automatic refresh
+     */
+    private async ensureValidToken(locationId: string): Promise<string> {
         try {
             // Create token validator
             const tokenValidator = createTokenValidator(
@@ -99,191 +193,12 @@ export class InventoryQueryService {
             );
 
             // Ensure we have a valid token (will refresh if needed)
-            const validAccessToken = await tokenValidator.ensureValidToken(locationId);
-
-            // Get the updated credentials
-            const credentialsResult = await this.credentialsStub.getCredentials(locationId);
-            
-            if (credentialsResult.httpCode !== 200 || !credentialsResult.data) {
-                throw new Error('Failed to retrieve credentials after token validation');
-            }
-
-            return {
-                accessToken: validAccessToken,
-                locationId: credentialsResult.data.location_id,
-                companyId: credentialsResult.data.company_id,
-                receiverEmails: credentialsResult.data.receiverEmails || [],
-                expiresAt: credentialsResult.data.expires_at
-            };
+            return await tokenValidator.ensureValidToken(locationId);
 
         } catch (error) {
-            console.error('Error getting valid credentials:', error);
-            return null;
+            console.error('Error ensuring valid token:', error);
+            throw new Error(`Failed to obtain valid credentials: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
-    }
-
-    /**
-     * Get total count of inventory items
-     */
-    private async getTotalItemCount(credentials: InventoryCredentials, locationId: string): Promise<number | null> {
-        try {
-            const countParams = new URLSearchParams({
-                limit: "0",
-                altId: locationId,
-                altType: "location"
-            });
-
-            const headers = {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${credentials.accessToken}`,
-                'Version': '2021-07-28'
-            };
-
-            const countResponse = await fetch(`${this.baseUrl}?${countParams}`, { headers });
-
-            if (!countResponse.ok) {
-                const errorText = await countResponse.text();
-                throw new Error(`Failed to fetch inventory count: ${countResponse.status} - ${errorText}`);
-            }
-
-            const countData = await countResponse.json() as any;
-            return countData?.total?.[0]?.total || 0;
-
-        } catch (error) {
-            console.error('Error getting total item count:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Fetch all inventory items
-     */
-    private async fetchAllItems(credentials: InventoryCredentials, locationId: string, totalCount: number): Promise<InventoryItem[] | null> {
-        try {
-            const allParams = new URLSearchParams({
-                limit: String(totalCount),
-                altId: locationId,
-                altType: "location"
-            });
-
-            const headers = {
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${credentials.accessToken}`,
-                'Version': '2021-07-28'
-            };
-
-            const inventoryResponse = await fetch(`${this.baseUrl}?${allParams}`, { headers });
-
-            if (!inventoryResponse.ok) {
-                const errorText = await inventoryResponse.text();
-                throw new Error(`Failed to fetch inventory items: ${inventoryResponse.status} - ${errorText}`);
-            }
-
-            const inventoryData = await inventoryResponse.json() as any;
-            
-            // Transform API response to our InventoryItem format
-            return this.transformApiItems(inventoryData.inventory || []);
-
-        } catch (error) {
-            console.error('Error fetching all items:', error);
-            return null;
-        }
-    }
-
-    /**
-     * Transform API response items to our InventoryItem format
-     */
-    private transformApiItems(apiItems: any[]): InventoryItem[] {
-        return apiItems.map(item => ({
-            id: item.id || item.productId || '',
-            name: item.name || item.title || '',
-            sku: item.sku || item.productSku || '',
-            category: item.category || '',
-            price: item.price ? parseFloat(item.price) : undefined,
-            quantity: item.quantity ? parseInt(item.quantity) : undefined,
-            lowStockThreshold: item.lowStockThreshold ? parseInt(item.lowStockThreshold) : undefined,
-            isLowStock: this.isLowStock(item),
-            description: item.description || '',
-            images: item.images || [],
-            status: item.status || 'active'
-        }));
-    }
-
-    /**
-     * Check if an item is low on stock
-     */
-    private isLowStock(item: any): boolean {
-        const quantity = item.quantity ? parseInt(item.quantity) : 0;
-        const threshold = item.lowStockThreshold ? parseInt(item.lowStockThreshold) : 5; // Default threshold
-        return quantity <= threshold;
-    }
-
-    /**
-     * Apply filters to inventory items
-     */
-    private applyFilters(items: InventoryItem[], filters: any): InventoryItem[] {
-        let filteredItems = [...items];
-
-        // Filter by low stock
-        if (filters.lowStockThreshold !== undefined) {
-            filteredItems = filteredItems.filter(item => {
-                const quantity = item.quantity || 0;
-                return quantity <= filters.lowStockThreshold;
-            });
-        }
-
-        // Filter by category
-        if (filters.category) {
-            filteredItems = filteredItems.filter(item => 
-                item.category?.toLowerCase().includes(filters.category.toLowerCase())
-            );
-        }
-
-        // Filter in-stock only
-        if (filters.inStockOnly) {
-            filteredItems = filteredItems.filter(item => (item.quantity || 0) > 0);
-        }
-
-        return filteredItems;
-    }
-
-    /**
-     * Apply pagination to items
-     */
-    private applyPagination(items: InventoryItem[], limit: number, offset: number): InventoryItem[] {
-        return items.slice(offset, offset + limit);
-    }
-
-    /**
-     * Filter items that are low on stock
-     * @param request - The inventory query request
-     * @returns InventoryQueryResult with only low-stock items
-     */
-    async queryLowStockItems(request: InventoryQueryRequest): Promise<InventoryQueryResult> {
-        // Set up filters for low stock items
-        const lowStockRequest = {
-            ...request,
-            filters: {
-                ...request.filters,
-                lowStockThreshold: request.filters?.lowStockThreshold || 5 // Default threshold
-            }
-        };
-
-        const result = await this.queryInventory(lowStockRequest);
-        
-        if (result.success) {
-            // Further filter to only include items marked as low stock
-            const lowStockItems = result.items.filter(item => item.isLowStock);
-            
-            return createInventoryQueryResultBuilder()
-                .setLocationId(request.locationId)
-                .setItems(lowStockItems)
-                .setTotalCount(result.totalCount)
-                .setMessage(`Found ${lowStockItems.length} low-stock items`)
-                .build();
-        }
-
-        return result;
     }
 }
 
