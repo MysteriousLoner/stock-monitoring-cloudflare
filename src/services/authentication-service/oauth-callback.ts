@@ -237,26 +237,30 @@ export class OAuthCallbackService {
                     <div class="data-item">Scope: ${result.data.scope || 'N/A'}</div>
                     <div class="data-item">Token Expires: ${result.data.expires_in}s</div>
                 </div>
+                <div style="margin-top: 1.5rem; padding: 1rem; background-color: #d1ecf1; border: 1px solid #bee5eb; border-radius: 4px; color: #0c5460;">
+                    <strong>✅ Authentication Complete!</strong><br>
+                    <span style="font-size: 0.9rem;">You can now close this tab manually.</span><br>
+                    <span style="font-size: 0.85rem; margin-top: 0.5rem; display: inline-block;">
+                        <strong>Keyboard shortcut:</strong> 
+                        <kbd style="background: #e9ecef; padding: 2px 4px; border-radius: 3px; margin: 0 2px;">Ctrl+W</kbd> (Windows/Linux) or 
+                        <kbd style="background: #e9ecef; padding: 2px 4px; border-radius: 3px; margin: 0 2px;">Cmd+W</kbd> (Mac)
+                    </span>
+                </div>
                 ` : ''}
                 
                 ${!result.success && result.error ? `
                 <div class="error-details">
                     Error: ${result.error}
                 </div>
-                ` : ''}
-                
-                <button class="close-btn" onclick="window.close()">
-                    ${result.success ? 'Close Window' : 'Try Again'}
+                <button class="close-btn" onclick="window.location.reload()" style="margin-top: 1rem;">
+                    Try Again
                 </button>
+                ` : ''}
             </div>
             
             <script>
-                // Auto-close on success after 5 seconds
-                ${result.success ? `
-                setTimeout(() => {
-                    window.close();
-                }, 5000);
-                ` : ''}
+                // No auto-close functionality - page remains static
+                console.log('OAuth callback page loaded successfully');
             </script>
         </body>
         </html>
