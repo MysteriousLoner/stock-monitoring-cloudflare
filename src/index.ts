@@ -3,6 +3,7 @@ import { ResponseBuilder } from "./common-types/response-builder";
 import { createOAuthHandler } from "./services/authentication-service";
 import { createInventoryQueryService } from "./services/inventory-query-service";
 import { createEmailUpdateService } from "./services/email-update-service";
+import { createUpdateAllClientStockStatus } from "./processes/update-all-client-stock-status";
 
 export { CredentialsDurableObject };
 
@@ -202,6 +203,97 @@ export default {
                 });
             }
         }
+
+        // Test update all clients stock status endpoint
+        if (method === 'GET' && url.pathname === '/test/updateClients') {
+            try {
+                console.log('Starting UpdateAllClientStockStatus process...');
+                
+                // Create the stock status updater
+                const stockStatusUpdater = createUpdateAllClientStockStatus({
+                    credentialsStub: stub,
+                    clientId: env.GHL_CLIENT_ID!,
+                    clientSecret: env.GHL_CLIENT_SECRET!,
+                    resendApiKey: env.RESEND_API_KEY!,
+                    senderEmail: env.RESEND_DOMAIN // Default sender email for testing
+                });
+
+                // Process all clients
+                const result = await stockStatusUpdater.processAllClients();
+
+                console.log('UpdateAllClientStockStatus process completed successfully');
+
+                // Return formatted response
+                return ResponseBuilder.build(200, {
+                    status: 'SUCCESS',
+                    message: 'Stock status update process completed',
+                    data: {
+                        summary: {
+                            processedLocations: result.processedLocations,
+                            emailsSent: result.emailsSent,
+                            errorsCount: result.errors.length,
+                            locationsWithoutEmails: result.locationsWithoutEmails,
+                            locationsWithoutStock: result.locationsWithoutStock
+                        },
+                        details: result.errors.length > 0 ? {
+                            errors: result.errors
+                        } : undefined
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error in UpdateAllClientStockStatus process:', error);
+                return ResponseBuilder.build(500, {
+                    status: 'ERROR',
+                    message: 'Failed to process stock status updates',
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                });
+            }
+        }
+
+        // Test scheduled event handler endpoint
+        if (method === 'GET' && url.pathname === '/test/scheduledEvent') {
+            try {
+                console.log('Manually triggering scheduled event logic...');
+                
+                // Run the same logic as the scheduled event
+                const stockStatusUpdater = createUpdateAllClientStockStatus({
+                    credentialsStub: stub,
+                    clientId: env.GHL_CLIENT_ID!,
+                    clientSecret: env.GHL_CLIENT_SECRET!,
+                    resendApiKey: env.RESEND_API_KEY!,
+                    senderEmail: 'stock-alerts@ly-utilies-portal.stream'
+                });
+
+                console.log('Starting scheduled stock status update process...');
+                const result = await stockStatusUpdater.processAllClients();
+
+                console.log('Scheduled stock status update completed successfully');
+
+                return ResponseBuilder.build(200, {
+                    status: 'SUCCESS',
+                    message: 'Scheduled event logic executed successfully (manual trigger)',
+                    data: {
+                        triggeredAt: new Date().toISOString(),
+                        summary: {
+                            processedLocations: result.processedLocations,
+                            emailsSent: result.emailsSent,
+                            errorsCount: result.errors.length,
+                            locationsWithoutEmails: result.locationsWithoutEmails,
+                            locationsWithoutStock: result.locationsWithoutStock
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error in scheduled event logic:', error);
+                return ResponseBuilder.build(500, {
+                    status: 'ERROR',
+                    message: 'Failed to execute scheduled event logic',
+                    error: error instanceof Error ? error.message : 'Unknown error'
+                });
+            }
+        }
         /**
          * Test endpoints end. -----------------------------------------------------
          */
@@ -222,5 +314,47 @@ export default {
             status: 404,
             headers: { 'Content-Type': 'text/plain' }
         });
+    },
+
+    /**
+     * Scheduled event handler for cron jobs
+     * Runs stock status updates twice daily at 8 AM and 8 PM UTC
+     */
+    async scheduled(event, env, ctx): Promise<void> {
+        console.log('Scheduled event triggered at:', new Date().toISOString());
+        console.log('Cron schedule:', event.cron);
+
+        try {
+            // Create a DurableObjectId for credentials access
+            const id: DurableObjectId = env.CREDENTIALS_DURABLE_OBJECT.idFromName("credentials_do");
+            const stub = env.CREDENTIALS_DURABLE_OBJECT.get(id);
+
+            // Create the stock status updater
+            const stockStatusUpdater = createUpdateAllClientStockStatus({
+                credentialsStub: stub,
+                clientId: env.GHL_CLIENT_ID!,
+                clientSecret: env.GHL_CLIENT_SECRET!,
+                resendApiKey: env.RESEND_API_KEY!,
+                senderEmail: 'stock-alerts@ly-utilies-portal.stream'
+            });
+
+            console.log('Starting scheduled stock status update process...');
+
+            // Process all clients
+            const result = await stockStatusUpdater.processAllClients();
+
+            console.log('Scheduled stock status update completed successfully');
+            console.log(`Summary: Processed ${result.processedLocations} locations, sent ${result.emailsSent} emails`);
+            console.log(`Skipped: ${result.locationsWithoutEmails} without emails, ${result.locationsWithoutStock} without stock issues`);
+
+            if (result.errors.length > 0) {
+                console.error(`Encountered ${result.errors.length} errors during processing:`, result.errors);
+            }
+
+        } catch (error) {
+            console.error('Error in scheduled stock status update:', error);
+            // You might want to send an alert to admins here
+            throw error; // This will mark the scheduled event as failed in Cloudflare
+        }
     },
 } satisfies ExportedHandler<Env>;

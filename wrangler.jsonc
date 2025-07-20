@@ -25,6 +25,17 @@
 	},
 	"observability": {
 		"enabled": true
+	},
+	/**
+	 * Cron Triggers
+	 * Schedule Workers to run on a cron schedule
+	 * https://developers.cloudflare.com/workers/configuration/cron-triggers/
+	 */
+	"triggers": {
+		"crons": [
+			"0 8 * * *",   // 8:00 AM UTC daily
+			"0 20 * * *"   // 8:00 PM UTC daily
+		]
 	}
 	/**
 	 * Smart Placement
