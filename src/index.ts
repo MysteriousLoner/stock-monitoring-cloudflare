@@ -136,7 +136,7 @@ export default {
         }
 
         // Handle POST /credentials - insert new credential (requires app password)
-        if (method === 'POST' && url.pathname === '/test/remove-credentials') {
+        if (method === 'POST' && pathname === '/test/remove-credentials') {
             try {
                 const body = await request.json() as any;
                 
@@ -178,7 +178,7 @@ export default {
         }
 
         // Inventory summary endpoint using the simplified inventory service (requires app password)
-        if (method === 'POST' && url.pathname === '/test/getInventory') {
+        if (method === 'POST' && pathname === '/test/getInventory') {
             try {
                 const body = await request.json() as any;
                 
@@ -225,7 +225,7 @@ export default {
         }
 
         // Update receiver emails endpoint
-        if (method === 'POST' && url.pathname === '/updateEmail') {
+        if (method === 'POST' && pathname === '/updateEmail') {
             try {
                 const body = await request.json() as any;
                 
@@ -263,7 +263,7 @@ export default {
         }
 
         // Test update all clients stock status endpoint (requires app password)
-        if (method === 'POST' && url.pathname === '/test/updateClients') {
+        if (method === 'POST' && pathname === '/test/updateClients') {
             try {
                 const body = await request.json() as any;
                 
@@ -316,7 +316,7 @@ export default {
         }
 
         // Test scheduled event handler endpoint (requires app password)
-        if (method === 'POST' && url.pathname === '/test/scheduledEvent') {
+        if (method === 'POST' && pathname === '/test/scheduledEvent') {
             try {
                 const body = await request.json() as any;
                 

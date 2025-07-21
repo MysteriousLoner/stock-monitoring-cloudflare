@@ -20,7 +20,7 @@ export class OAuthInitiationService {
         console.log('OAuth initiation started for client:', request.clientId);
 
         const redirectUrl = this.buildAuthUrl(request);
-        
+
         console.log(`Redirecting to: ${redirectUrl}`);
 
         // Return redirect response (302)
