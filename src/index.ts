@@ -37,6 +37,14 @@ export default {
         const url = new URL(request.url);
         const method = request.method;
 
+        // Strip /stock-monitoring prefix if present (Cloudflare routing handles this)
+        let pathname = url.pathname;
+        if (pathname.startsWith('/stock-monitoring')) {
+            pathname = pathname.replace('/stock-monitoring', '') || '/';
+        }
+
+        console.log(`Request received: ${method} ${pathname}`);
+
         // Create a `DurableObjectId` for an instance of the `CredentialsDurableObject`
         // class named "CredentialsDurableObject". Requests from all Workers to the instance named
         // "CredentialsDurableObject" will go to a single globally unique Durable Object instance.
@@ -50,7 +58,7 @@ export default {
          * Oauth endpoints start. -----------------------------------------------------
          */
         // Handle OAuth initiation
-        if (method === 'GET' && url.pathname === '/oauth/initiate') {
+        if (method === 'GET' && pathname === '/oauth/initiate') {
             console.log('OAuth initiation requested');
             
             const oauthHandler = createOAuthHandler(
@@ -64,7 +72,7 @@ export default {
         }
         
         // Handle OAuth callback
-        if (method === 'GET' && url.pathname === '/oauth/callback') {
+        if (method === 'GET' && pathname === '/oauth/callback') {
             console.log('OAuth callback received');
             
             const oauthHandler = createOAuthHandler(
@@ -88,7 +96,7 @@ export default {
          * Test endpoints start. -----------------------------------------------------
          */
         // Handle POST /credentials - return all credentials (requires app password)
-        if (method === 'POST' && url.pathname === '/test/show-all-credentials') {
+        if (method === 'POST' && pathname === '/test/show-all-credentials') {
             try {
                 const body = await request.json() as any;
                 

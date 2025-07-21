@@ -43,8 +43,9 @@
 	 * https://developers.cloudflare.com/workers/configuration/routing/routes/
 	 */
 	"routes": [
+		"ly-utilies-portal.stream/stock-monitoring",
 		"ly-utilies-portal.stream/stock-monitoring/*"
-	]
+	],
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
