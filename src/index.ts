@@ -7,6 +7,23 @@ import { createUpdateAllClientStockStatus } from "./processes/update-all-client-
 
 export { CredentialsDurableObject };
 
+/**
+ * Validates the app password from request body
+ * @param body - The request body containing appPassword
+ * @param env - Environment variables containing APP_PASSWORD
+ * @returns Response object if validation fails, null if validation passes
+ */
+function validateAppPassword(body: any, env: Env): Response | null {
+    if (!body.appPassword || body.appPassword !== env.APP_PASSWORD) {
+        return ResponseBuilder.build(401, {
+            status: 'ERROR',
+            errorCode: 'INVALID_PASSWORD',
+            message: 'Invalid or missing app password'
+        });
+    }
+    return null;
+}
+
 export default {
     /**
      * This is the standard fetch handler for a Cloudflare Worker
@@ -70,73 +87,106 @@ export default {
         /**
          * Test endpoints start. -----------------------------------------------------
          */
-        // Handle GET /credentials - return all credentials
-        if (method === 'GET' && url.pathname === '/test/show-all-credentials') {
-            const url = new URL(request.url);
-            const location_id = url.searchParams.get('location_id');
-            if (location_id) {
-                console.log(`Fetching credentials for location_id: ${location_id}`);
-                const result = await stub.getCredentials(location_id);
-                return ResponseBuilder.build(result.httpCode, result);
-            }
-            else {
-                const result = await stub.getCredentials();
-                const credentialsDB = [];
+        // Handle POST /credentials - return all credentials (requires app password)
+        if (method === 'POST' && url.pathname === '/test/show-all-credentials') {
+            try {
+                const body = await request.json() as any;
                 
-                // Handle the case where result.data might be a single object or array
-                const dataArray = Array.isArray(result.data) ? result.data : [result.data];
-                
-                for (const credential of dataArray ?? []) {
-                    credentialsDB.push(JSON.stringify(credential));
+                // Validate app password
+                const passwordError = validateAppPassword(body, env);
+                if (passwordError) return passwordError;
+
+                const location_id = body.location_id;
+                if (location_id) {
+                    console.log(`Fetching credentials for location_id: ${location_id}`);
+                    const result = await stub.getCredentials(location_id);
+                    return ResponseBuilder.build(result.httpCode, result);
                 }
-                for (const credential of credentialsDB) {
-                    console.log(`Credential: ${credential}`);
+                else {
+                    const result = await stub.getCredentials();
+                    const credentialsDB = [];
+                    
+                    // Handle the case where result.data might be a single object or array
+                    const dataArray = Array.isArray(result.data) ? result.data : [result.data];
+                    
+                    for (const credential of dataArray ?? []) {
+                        credentialsDB.push(JSON.stringify(credential));
+                    }
+                    for (const credential of credentialsDB) {
+                        console.log(`Credential: ${credential}`);
+                    }
+                    return ResponseBuilder.build(result.httpCode, credentialsDB);
                 }
-                return ResponseBuilder.build(result.httpCode, credentialsDB);
-            }
-        }
-
-        // Handle POST /credentials - insert new credential
-        if (method === 'POST' && url.pathname === '/test/remove-credentials') {
-            const body = await request.json() as any;
-            
-            // Validate required fields
-            const requiredFields = ['location_id', 'company_id', 'access_token', 'refresh_token', 'expires_at'];
-            const missingFields = requiredFields.filter(field => !body[field]);
-            
-            if (missingFields.length > 0) {
-                const errorObject = {
-                    status: 'ERROR',
-                    errorCode: 'MISSING_FIELDS',
-                    message: `Missing required fields: ${missingFields.join(', ')}`,
-                    missingFields: missingFields
-                };
-                return ResponseBuilder.build(400, errorObject);
-            }
-
-            const result = await stub.insertCredential({
-                location_id: body.location_id,
-                company_id: body.company_id,
-                access_token: body.access_token,
-                refresh_token: body.refresh_token,
-                expires_at: body.expires_at
-            });
-
-            return ResponseBuilder.build(result.httpCode, result);
-        }
-
-        // Inventory summary endpoint using the simplified inventory service
-        if (method === 'GET' && url.pathname === '/test/getInventory') {
-            const location_id = url.searchParams.get('location_id');
-            
-            if (!location_id) {
+            } catch (error) {
+                console.error('Error in show-all-credentials endpoint:', error);
                 return ResponseBuilder.build(400, {
                     status: 'ERROR',
-                    message: 'location_id parameter is required'
+                    errorCode: 'INVALID_REQUEST',
+                    message: 'Invalid JSON in request body'
                 });
             }
+        }
 
+        // Handle POST /credentials - insert new credential (requires app password)
+        if (method === 'POST' && url.pathname === '/test/remove-credentials') {
             try {
+                const body = await request.json() as any;
+                
+                // Validate app password
+                const passwordError = validateAppPassword(body, env);
+                if (passwordError) return passwordError;
+                
+                // Validate required fields
+                const requiredFields = ['location_id', 'company_id', 'access_token', 'refresh_token', 'expires_at'];
+                const missingFields = requiredFields.filter(field => !body[field]);
+                
+                if (missingFields.length > 0) {
+                    const errorObject = {
+                        status: 'ERROR',
+                        errorCode: 'MISSING_FIELDS',
+                        message: `Missing required fields: ${missingFields.join(', ')}`,
+                        missingFields: missingFields
+                    };
+                    return ResponseBuilder.build(400, errorObject);
+                }
+
+                const result = await stub.insertCredential({
+                    location_id: body.location_id,
+                    company_id: body.company_id,
+                    access_token: body.access_token,
+                    refresh_token: body.refresh_token,
+                    expires_at: body.expires_at
+                });
+
+                return ResponseBuilder.build(result.httpCode, result);
+            } catch (error) {
+                console.error('Error in remove-credentials endpoint:', error);
+                return ResponseBuilder.build(400, {
+                    status: 'ERROR',
+                    errorCode: 'INVALID_REQUEST',
+                    message: 'Invalid JSON in request body'
+                });
+            }
+        }
+
+        // Inventory summary endpoint using the simplified inventory service (requires app password)
+        if (method === 'POST' && url.pathname === '/test/getInventory') {
+            try {
+                const body = await request.json() as any;
+                
+                // Validate app password
+                const passwordError = validateAppPassword(body, env);
+                if (passwordError) return passwordError;
+
+                const location_id = body.location_id;
+                
+                if (!location_id) {
+                    return ResponseBuilder.build(400, {
+                        status: 'ERROR',
+                        message: 'location_id parameter is required'
+                    });
+                }
+
                 // Create inventory query service
                 const inventoryService = createInventoryQueryService(
                     stub,
@@ -204,9 +254,15 @@ export default {
             }
         }
 
-        // Test update all clients stock status endpoint
-        if (method === 'GET' && url.pathname === '/test/updateClients') {
+        // Test update all clients stock status endpoint (requires app password)
+        if (method === 'POST' && url.pathname === '/test/updateClients') {
             try {
+                const body = await request.json() as any;
+                
+                // Validate app password
+                const passwordError = validateAppPassword(body, env);
+                if (passwordError) return passwordError;
+
                 console.log('Starting UpdateAllClientStockStatus process...');
                 
                 // Create the stock status updater
@@ -251,9 +307,15 @@ export default {
             }
         }
 
-        // Test scheduled event handler endpoint
-        if (method === 'GET' && url.pathname === '/test/scheduledEvent') {
+        // Test scheduled event handler endpoint (requires app password)
+        if (method === 'POST' && url.pathname === '/test/scheduledEvent') {
             try {
+                const body = await request.json() as any;
+                
+                // Validate app password
+                const passwordError = validateAppPassword(body, env);
+                if (passwordError) return passwordError;
+
                 console.log('Manually triggering scheduled event logic...');
                 
                 // Run the same logic as the scheduled event

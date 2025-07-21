@@ -1,0 +1,473 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2025-07-21T00:00:00.000Z",
+  "__export_source": "insomnia.desktop.app:v2023.5.8",
+  "resources": [
+    {
+      "_id": "req_oauth_initiate",
+      "parentId": "fld_oauth",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/oauth/initiate",
+      "name": "OAuth Initiate",
+      "description": "Start OAuth flow for GoHighLevel authentication",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1690000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_oauth_callback",
+      "parentId": "fld_oauth",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/oauth/callback?code=YOUR_AUTH_CODE&state=YOUR_STATE",
+      "name": "OAuth Callback",
+      "description": "Handle OAuth callback (normally called by GoHighLevel)",
+      "method": "GET",
+      "body": {},
+      "parameters": [
+        {
+          "id": "pair_code",
+          "name": "code",
+          "value": "YOUR_AUTH_CODE",
+          "description": "Authorization code from OAuth provider"
+        },
+        {
+          "id": "pair_state",
+          "name": "state",
+          "value": "YOUR_STATE",
+          "description": "State parameter for CSRF protection"
+        }
+      ],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1689999000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_email",
+      "parentId": "fld_production",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/updateEmail",
+      "name": "Update Receiver Emails",
+      "description": "Update email list for a location (production endpoint)",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"locationId\": \"YOUR_LOCATION_ID\",\n  \"appPassword\": \"{{ _.appPassword }}\",\n  \"emailList\": [\n    \"admin@example.com\",\n    \"manager@example.com\",\n    \"alerts@example.com\"\n  ]\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1688000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_show_all_credentials",
+      "parentId": "fld_test",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/test/show-all-credentials",
+      "name": "Show All Credentials",
+      "description": "Get all stored credentials or specific location credentials",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"appPassword\": \"{{ _.appPassword }}\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1687000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_show_specific_credential",
+      "parentId": "fld_test",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/test/show-all-credentials",
+      "name": "Show Specific Location Credential",
+      "description": "Get credentials for a specific location",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"appPassword\": \"{{ _.appPassword }}\",\n  \"location_id\": \"YOUR_LOCATION_ID\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1686500000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_insert_credential",
+      "parentId": "fld_test",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/test/remove-credentials",
+      "name": "Insert/Remove Credential",
+      "description": "Insert new OAuth credentials for a location",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"appPassword\": \"{{ _.appPassword }}\",\n  \"location_id\": \"YOUR_LOCATION_ID\",\n  \"company_id\": \"YOUR_COMPANY_ID\",\n  \"access_token\": \"YOUR_ACCESS_TOKEN\",\n  \"refresh_token\": \"YOUR_REFRESH_TOKEN\",\n  \"expires_at\": \"2025-12-31T23:59:59.000Z\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1686000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_get_inventory",
+      "parentId": "fld_test",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/test/getInventory",
+      "name": "Get Inventory Summary",
+      "description": "Get inventory summary for a specific location",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"appPassword\": \"{{ _.appPassword }}\",\n  \"location_id\": \"YOUR_LOCATION_ID\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1685000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_update_clients",
+      "parentId": "fld_test",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/test/updateClients",
+      "name": "Update All Clients Stock Status",
+      "description": "Manually trigger stock status update for all clients",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"appPassword\": \"{{ _.appPassword }}\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1684000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_scheduled_event",
+      "parentId": "fld_test",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/test/scheduledEvent",
+      "name": "Test Scheduled Event",
+      "description": "Manually trigger the scheduled event logic for testing",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"appPassword\": \"{{ _.appPassword }}\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_content_type",
+          "name": "Content-Type",
+          "value": "application/json",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1683000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "req_cors_options",
+      "parentId": "fld_other",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "url": "{{ _.baseUrl }}/any-endpoint",
+      "name": "CORS Preflight (OPTIONS)",
+      "description": "Test CORS preflight request",
+      "method": "OPTIONS",
+      "body": {},
+      "parameters": [],
+      "headers": [
+        {
+          "id": "pair_origin",
+          "name": "Origin",
+          "value": "https://example.com",
+          "description": ""
+        },
+        {
+          "id": "pair_access_control_request_method",
+          "name": "Access-Control-Request-Method",
+          "value": "POST",
+          "description": ""
+        },
+        {
+          "id": "pair_access_control_request_headers",
+          "name": "Access-Control-Request-Headers",
+          "value": "Content-Type",
+          "description": ""
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": -1682000000000,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global",
+      "_type": "request"
+    },
+    {
+      "_id": "fld_oauth",
+      "parentId": "wrk_main",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "OAuth Endpoints",
+      "description": "OAuth authentication flow endpoints",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1690000000000,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_production",
+      "parentId": "wrk_main",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Production Endpoints",
+      "description": "Production endpoints for normal operation",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1688000000000,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_test",
+      "parentId": "wrk_main",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Test Endpoints (Password Protected)",
+      "description": "Test and debugging endpoints that require app password",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1687000000000,
+      "_type": "request_group"
+    },
+    {
+      "_id": "fld_other",
+      "parentId": "wrk_main",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Other Endpoints",
+      "description": "CORS and other utility endpoints",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": -1682000000000,
+      "_type": "request_group"
+    },
+    {
+      "_id": "wrk_main",
+      "parentId": null,
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Stock Monitoring CloudFlare Worker",
+      "description": "API collection for Stock Monitoring CloudFlare Worker with Durable Objects",
+      "scope": "collection",
+      "_type": "workspace"
+    },
+    {
+      "_id": "env_base",
+      "parentId": "wrk_main",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "https://your-worker-name.your-account.workers.dev",
+        "appPassword": "YOUR_APP_PASSWORD_HERE",
+        "localUrl": "http://localhost:8787"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "baseUrl",
+          "appPassword", 
+          "localUrl"
+        ]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 1690000000000,
+      "_type": "environment"
+    },
+    {
+      "_id": "env_local",
+      "parentId": "env_base",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Local Development",
+      "data": {
+        "baseUrl": "{{ _.localUrl }}"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "baseUrl"
+        ]
+      },
+      "color": "#7d69cb",
+      "isPrivate": false,
+      "metaSortKey": 1690000000000,
+      "_type": "environment"
+    },
+    {
+      "_id": "env_production",
+      "parentId": "env_base",
+      "modified": 1690000000000,
+      "created": 1690000000000,
+      "name": "Production",
+      "data": {
+        "baseUrl": "https://your-worker-name.your-account.workers.dev"
+      },
+      "dataPropertyOrder": {
+        "&": [
+          "baseUrl"
+        ]
+      },
+      "color": "#d9534f",
+      "isPrivate": false,
+      "metaSortKey": 1690000000001,
+      "_type": "environment"
+    }
+  ]
+}
