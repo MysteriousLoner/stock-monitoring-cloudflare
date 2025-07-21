@@ -36,7 +36,15 @@
 			"0 8 * * *",   // 8:00 AM UTC daily
 			"0 20 * * *"   // 8:00 PM UTC daily
 		]
-	}
+	},
+	/**
+	 * Custom Routes
+	 * Map your worker to custom domains/paths
+	 * https://developers.cloudflare.com/workers/configuration/routing/routes/
+	 */
+	"routes": [
+		"ly-utilies-portal.stream/stock-monitoring/*"
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
