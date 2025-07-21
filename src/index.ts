@@ -58,7 +58,7 @@ export default {
             return new Response (response.body, {
                 status: response.status,
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'text/html',
                     'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                     'Access-Control-Allow-Headers': 'Content-Type',

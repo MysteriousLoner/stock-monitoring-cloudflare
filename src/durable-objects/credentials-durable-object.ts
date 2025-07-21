@@ -1,5 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { ResponseStatus } from "../common-types/status";
+import { EmailService } from "../email/email";
 
 export class CredentialsDurableObject extends DurableObject<Env> {
     sql: SqlStorage;
@@ -148,8 +149,6 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             this.ensureValidToken(locationId);
 
             const accessToken = await this.getCredentials(locationId);
-            // console.log(`Access Token for location_id ${accessToken.data.access_token}:`);
-            // console.log(`Access Token: ${accessToken?.data.access_token?.slice(0, 10) ?? 'None'}...`);
 
             const baseUrl = "https://services.leadconnectorhq.com/products/inventory";
             const headers = {
@@ -207,12 +206,21 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             }
 
             const inventoryData = await inventoryRes.json();
-            // console.log(`Fetched ${JSON.stringify(inventoryData)}`);
 
-            return new Response(JSON.stringify(inventoryData), {
+            const { lowstock, outofstock } = await this.queryInv(inventoryData.inventory);
+ 
+            const emailService = new EmailService();
+
+            const emailBody = await emailService.sendEmail(this.env.RESEND_API, lowstock, outofstock, inventoryData, locationId, this.env.EMAIL);
+
+            return new Response(emailBody, {
             status: 200,
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'text/html' }
             });
+            // return new Response(JSON.stringify(inventoryData), {
+            // status: 200,
+            // headers: { 'Content-Type': 'application/json' }
+            // });
 
         } catch (e: any) {
             console.error("Unexpected error in get_inventory:", e);
@@ -221,6 +229,34 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             { status: 500, headers: { 'Content-Type': 'application/json' } }
             );
         }
+    }
+
+    async queryInv(Inv: string[]) : Promise<{ outofstock: string[]; lowstock: string[] }> {
+        if (!Inv || Inv.length === 0) {
+            console.error("No inventory items provided for query");
+            throw new Error("No inventory items provided for query");
+        }
+
+        let lowStockItems: string[] = [];
+        let outOfStockItems: string[] = [];
+        try {
+            Inv.forEach(item => {
+                if (item.availableQuantity == 0) {
+                    outOfStockItems.push(`${item.productName} - ${item.name}`);
+                } else if (item.availableQuantity < 2 && item.availableQuantity > 0) {
+                    lowStockItems.push(`${item.productName} - ${item.name}`);
+                }
+            })
+        } catch(e: any) {
+            console.error(`Error querying inventory: ${e.message || e.toString()}`);
+            throw new Error(`Error querying inventory: ${e.message || e.toString()}`);
+        };
+
+        // console.log(`Email body: ${emailBody}`);
+        return {
+            outofstock: outOfStockItems.join('\n'),
+            lowstock: lowStockItems.join('\n'),
+        };
     }
 
     async ensureValidToken(locationId: string): Promise<string> {
@@ -264,7 +300,6 @@ export class CredentialsDurableObject extends DurableObject<Env> {
             throw new Error(`Error ensuring valid token: ${err.message || err.toString()}`);
         }
     }
-
     
     async refreshAccessToken(locationId: string): Promise<boolean> {
         if (!locationId) {
