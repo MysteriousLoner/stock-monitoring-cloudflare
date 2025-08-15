@@ -27,6 +27,7 @@ export interface InventorySummary {
     items_with_stock: number;
     items_out_of_stock: number;
     out_of_stock_products: string[];
+    in_stock_products: string[];
 }
 
 export class InventoryQueryService {
@@ -84,6 +85,15 @@ export class InventoryQueryService {
                     return variantName ? `${productName} - ${variantName}` : productName;
                 })
                 .sort(); // Sort alphabetically
+
+            const inStockProducts = items
+                .filter(item => (item.availableQuantity || 0) > 0)
+                .map(item => {
+                    const productName = item.productName || 'Unknown Product';
+                    const variantName = item.name || '';
+                    return variantName ? `${productName} - ${variantName}` : productName;
+                })
+                .sort();
             
             const summary: InventorySummary = {
                 location_id: locationId,
@@ -92,7 +102,8 @@ export class InventoryQueryService {
                 unique_products: uniqueProducts,
                 items_with_stock: itemsWithStock,
                 items_out_of_stock: itemsOutOfStock,
-                out_of_stock_products: outOfStockProducts
+                out_of_stock_products: outOfStockProducts,
+                in_stock_products: inStockProducts
             };
             
             console.log(`Generated inventory summary for location_id: ${locationId}`);
